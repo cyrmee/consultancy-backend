@@ -1,0 +1,690 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  Admin
+  Agent
+  Student
+  Finance
+  Admission
+  Visa
+}
+
+enum Gender {
+  Male
+  Female
+}
+
+enum NotificationType {
+  Chat
+  Normal
+}
+
+model Notification {
+  id      String           @id @default(uuid())
+  title   String
+  content String
+  read    Boolean          @default(false)
+  type    NotificationType @default(Normal)
+
+  createdAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  sender      User?   @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  senderId    String?
+  recipient   User?   @relation("Recipient", fields: [recipientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  recipientId String?
+}
+
+model Post {
+  id          String  @id @default(uuid())
+  title       String
+  description String
+  image       String
+  videoLink   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+}
+
+enum ConversationType {
+  Forum
+  Group
+  Private
+}
+
+model Conversation {
+  id    String           @id @default(uuid())
+  type  ConversationType @default(Private)
+  title String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  participants User[]         @relation("ParticipantConversations")
+  messages     Message[]
+  forumMessage ForumMessage[]
+}
+
+model Message {
+  id String @id @default(uuid())
+
+  sender      User   @relation("Sender", fields: [senderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  senderId    String
+  recipient   User   @relation("Recipient", fields: [recipientId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  recipientId String
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  conversationId String
+
+  content String
+  sentAt  DateTime @default(now())
+  read    Boolean  @default(false)
+}
+
+model ForumMessage {
+  id String @id @default(uuid())
+
+  sender   User   @relation("ForumSender", fields: [senderId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  senderId String
+
+  conversation   Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  conversationId String
+
+  content String
+  sentAt  DateTime @default(now())
+  read    Boolean  @default(false)
+}
+
+model User {
+  id          String  @id @default(uuid())
+  email       String  @unique
+  firstName   String  @default("NA")
+  lastName    String  @default("NA")
+  phoneNumber String? @unique
+  gender      Gender?
+  roles       Role[]
+
+  hash                  String
+  isDeactivated         Boolean @default(false)
+  isDeleted             Boolean @default(false)
+  isPhoneNumberVerified Boolean @default(false)
+  isEmailVerified       Boolean @default(false)
+  isPasswordChanged     Boolean @default(false)
+
+  access_token String?
+  expires_in   Int?
+  calendarId   String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  student               Student?
+  employee              Employee?
+  comment               Comment[]
+  messagesSent          Message[]          @relation("Sender")
+  messagesReceived      Message[]          @relation("Recipient")
+  audit                 Audit[]
+  userNotification      UserNotification[]
+  conversations         Conversation[]     @relation("ParticipantConversations")
+  forumMessage          ForumMessage[]     @relation("ForumSender")
+  notificationSender    Notification[]     @relation("Sender")
+  notificationRecipient Notification[]     @relation("Recipient")
+
+  @@index([firstName])
+  @@index([lastName])
+  @@index([email])
+  @@index([phoneNumber])
+}
+
+model UserNotification {
+  id     String @id @default(uuid())
+  user   User   @relation(fields: [userId], references: [id], onUpdate: Cascade, onDelete: Cascade)
+  userId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  expoToken String
+
+  @@unique([expoToken, userId])
+}
+
+model Employee {
+  id                         String    @id @default(uuid())
+  firstName                  String
+  lastName                   String
+  gender                     Gender
+  dateOfBirth                DateTime?
+  applicationAssignmentCount Int       @default(0)
+  isSuspended                Boolean   @default(false)
+  studentAssignmentCount     Int       @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  user    User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId  String    @unique
+  student Student[]
+
+  visa      Application[] @relation("VisaApplication")
+  finance   Application[] @relation("FianceApplication")
+  admission Application[] @relation("AdmissionIdApplication")
+  calendar  Calendar[]
+
+  @@index([firstName])
+  @@index([lastName])
+}
+
+model Student {
+  id             String    @id @default(uuid())
+  firstName      String
+  lastName       String
+  gender         Gender
+  dateOfBirth    DateTime?
+  admissionEmail String
+  branch         String    @default("Bole")
+  isActive       Boolean   @default(false)
+  isClient       Boolean   @default(true)
+
+  image String? @default("") // * path to student image 
+
+  // * Passport Information
+  passportNumber     String?
+  issueDate          DateTime?
+  expiryDate         DateTime?
+  passportAttachment String? // * path to passport image
+
+  // * Security related fields that are specific to students
+  isPhoneNumberVerified Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  studentAddress       StudentAddress?
+  studentRelations     StudentRelations[]
+  educationBackgrounds EducationBackground[]
+  applications         Application[]
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String @unique
+
+  // * Agent that registered the student
+  agent   Employee? @relation(fields: [agentId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  agentId String?
+
+  additionalStudentFiles AdditionalStudentFiles[]
+  futureStudentInfo      FutureStudentInfo?
+
+  @@index([firstName])
+  @@index([lastName])
+  @@index([admissionEmail])
+  @@index([branch])
+  @@index([passportNumber])
+}
+
+model FutureStudentInfo {
+  id String @id @default(uuid())
+
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  studentId String  @unique
+
+  level   String
+  country Country
+  field   String
+}
+
+enum AdditionalFileType {
+  MediumOfInstruction
+  RecommendationLetter
+  BankStatement
+  Other
+}
+
+model AdditionalStudentFiles {
+  id String @id @default(uuid())
+
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  studentId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  fileType AdditionalFileType
+  fileUri  String
+}
+
+model StudentAddress {
+  id          String  @id @default(uuid())
+  region      String
+  city        String?
+  subCity     String?
+  woreda      String?
+  kebele      String?
+  houseNumber String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  studentId String  @unique
+}
+
+enum Relationship {
+  Brother
+  Sister
+  Mother
+  Father
+}
+
+model StudentRelations {
+  id               String       @id @default(uuid())
+  firstName        String
+  lastName         String
+  phoneNumber      String?
+  educationalLevel String?
+  dateOfBirth      DateTime?
+  relationship     Relationship
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  studentId String
+}
+
+model EducationBackground {
+  id String @id @default(uuid())
+
+  institution        String
+  degree             String // * This means their level of education, could be Primary, Secondary or College level
+  fieldOfStudy       String?
+  startDate          DateTime
+  endDate            DateTime?
+  gpa                Float?
+  rank               Int?
+  certificateFileUri String?
+  transcriptFileUri  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  student   Student? @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  studentId String?
+}
+
+model Comment {
+  id       String  @id @default(uuid())
+  text     String
+  isEdited Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  applicationId String
+
+  parentId String?
+  parent   Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  replies  Comment[] @relation("CommentReplies")
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  userId String
+}
+
+enum PaymentStatus {
+  Pending
+  Complete
+  Expired
+}
+
+model Deposit {
+  id          String        @id @default(uuid())
+  status      PaymentStatus
+  isDeposited Boolean       @default(false)
+  isBlocked   Boolean       @default(false)
+  expiration  DateTime? // Date and time when the deposit expires
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  // Relation to Application
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  applicationId String      @unique
+}
+
+enum EnglishTestStatus {
+  Pending
+  Passed
+  Failed
+}
+
+model EnglishTest {
+  id            String            @id @default(uuid())
+  practiceLink  String
+  practiceLink2 String?
+  testDate      DateTime?
+  score         String            @default("")
+  hasPassed     EnglishTestStatus @default(Pending)
+
+  // English testing platform credentials
+  email    String
+  password String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  applicationId String      @unique
+}
+
+enum ApplicationStatus {
+  Deposit
+  EnglishTest
+  Admission
+  Visa
+  VisaDecision
+}
+
+enum AdmissionStatus {
+  Pending
+  Applying
+  Accepted
+  Rejected
+}
+
+model PendingDocument {
+  id      String  @id @default(uuid())
+  name    String
+  fileUrl String?
+
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  applicationId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+}
+
+enum Country {
+  UnitedStates
+  Canada
+  Italy
+  Hungary
+}
+
+enum Season {
+  Summer
+  Spring
+  Autumn
+  Winter
+  Fall
+}
+
+model Institute {
+  id String @id @default(uuid())
+
+  name            String
+  admissionStatus AdmissionStatus @default(Pending)
+  comment         String          @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  application   Application? @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  applicationId String?
+}
+
+enum EnglishTestRequiredStatus {
+  Pending
+  Yes
+  No
+}
+
+model Application {
+  id                  String                    @id @default(uuid())
+  country             Country
+  educationalLevel    String
+  fieldOfStudy        String
+  intake              Season?
+  applicationStatus   ApplicationStatus         @default(Deposit)
+  admissionStatus     AdmissionStatus           @default(Pending)
+  englishTestRequired EnglishTestRequiredStatus @default(Pending)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  student   Student @relation(fields: [studentId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  studentId String
+
+  visa   Employee @relation("VisaApplication", fields: [visaId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  visaId String
+
+  finance   Employee @relation("FianceApplication", fields: [financeId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  financeId String
+
+  admission   Employee @relation("AdmissionIdApplication", fields: [admissionId], references: [id], onDelete: Restrict, onUpdate: Cascade)
+  admissionId String
+
+  comment Comment[]
+
+  pendingDocuments PendingDocument[]
+
+  englishTest EnglishTest?
+
+  deposit Deposit?
+
+  unitedStatesVisa UnitedStatesVisa?
+  canadaVisa       CanadaVisa?
+  calendar         Calendar[]
+  institutes       Institute[]
+
+  @@index([educationalLevel])
+  @@index([fieldOfStudy])
+}
+
+enum VisaPaymentStatus {
+  Paid
+  Unpaid
+}
+
+enum InterviewScheduleStatus {
+  Pending
+  Attended
+  Missed
+}
+
+enum UnitedStatesVisaApplicationStatus {
+  Pending
+  DocumentsReceived
+  VisaFeeFileUploaded
+  VisaFeePaid
+  InterviewTrainingScheduled
+  InterviewTrainingComplete
+  InterviewScheduled
+  DepositPaymentPending
+  DepositPaymentComplete
+  InterviewComplete
+  SevisPaid
+  NotifiedUser
+}
+
+enum DepositPaymentStatus {
+  Paid
+  Unpaid
+  Expired
+}
+
+model UnitedStatesVisa {
+  id            String      @id @default(uuid())
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  applicationId String      @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  visaApplicationStatus UnitedStatesVisaApplicationStatus
+
+  requiredDocumentsRequested Boolean @default(false)
+  requiredDocumentsReceived  Boolean @default(false)
+
+  visaFeeFileUri       String?
+  visaFeePaymentStatus VisaPaymentStatus
+
+  interviewTrainingSchedules        InterviewTrainingSchedule[]
+  interviewTrainingScheduleComplete Boolean                     @default(false)
+
+  interviewSchedule              DateTime?
+  // * serviceFeeDepositDate should be 21 days before the interview date
+  serviceFeeDepositDate          DateTime?
+  serviceFeeDepositPaymentStatus DepositPaymentStatus @default(Unpaid)
+  interviewAttended              Boolean              @default(false)
+
+  sevisPaymentStatus VisaPaymentStatus
+
+  visaAccepted                 Boolean   @default(false)
+  visaStatusNotificationSent   Boolean   @default(false)
+  visaStatusNotificationSentAt DateTime?
+}
+
+enum CanadaVisaApplicationStatus {
+  Pending
+  DocumentsReceived
+  VisaApplicationAndBiometricFeeAmountSet
+  VisaApplicationAndBiometricFeePaid
+  DepositPaymentPending
+  DepositPaymentComplete
+  ConfirmationSent
+  NotifiedUser
+}
+
+enum VisaApplicationAndBiometricFeeStatus {
+  Attended
+  NotAttended
+  Missed
+}
+
+model CanadaVisa {
+  id            String      @id @default(uuid())
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  applicationId String      @unique
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  visaApplicationStatus CanadaVisaApplicationStatus?
+
+  requiredDocumentsRequested Boolean @default(false)
+  requiredDocumentsReceived  Boolean @default(false)
+
+  visaApplicationAndBiometricFeeAmount Float             @default(0)
+  visaApplicationAndBiometricFee       VisaPaymentStatus
+
+  biometricSubmissionDate              DateTime?
+  // * serviceFeeDepositDate date should be 21 days after the current date
+  serviceFeeDepositDate                DateTime?
+  serviceFeeDepositPaymentStatus       DepositPaymentStatus                 @default(Unpaid)
+  visaApplicationAndBiometricSubmitted VisaApplicationAndBiometricFeeStatus @default(NotAttended)
+
+  paymentConfirmationFileUri     String?
+  applicationConfirmationFileUri String?
+
+  confirmationSent     Boolean @default(false)
+  confirmationReceived Boolean @default(false)
+
+  visaAccepted                 Boolean   @default(false)
+  visaStatusNotificationSent   Boolean   @default(false)
+  visaStatusNotificationSentAt DateTime?
+}
+
+model InterviewTrainingSchedule {
+  id                 String           @id @default(uuid())
+  unitedStatesVisa   UnitedStatesVisa @relation(fields: [unitedStatesVisaId], references: [id], onDelete: Cascade)
+  unitedStatesVisaId String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+
+  date   DateTime
+  status InterviewScheduleStatus
+}
+
+enum Operation {
+  Create
+  Update
+  Delete
+}
+
+model Audit {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  user   User?   @relation(fields: [userId], references: [id], onDelete: SetNull, onUpdate: Cascade)
+  userId String?
+
+  entity   String
+  recordId String
+
+  operation      Operation
+  previousValues String?
+  detail         String?
+}
+
+enum EventCategory {
+  Visa
+  Finance
+  General
+}
+
+model Calendar {
+  id                    String        @id @default(uuid())
+  externalId            String        @unique
+  startDate             DateTime
+  endDate               DateTime
+  title                 String
+  description           String
+  color                 String?
+  googleColor           String?
+  googleCalenderEventId String?
+  eventCategory         EventCategory @default(General)
+  isAttended            Boolean       @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+
+  application   Application @relation(fields: [applicationId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  applicationId String
+
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade, onUpdate: Cascade)
+  employeeId String
+}
+
+model Ad {
+  id    String @id @default(uuid())
+  image String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @default(now())
+  isDeleted Boolean  @default(false)
+}
